@@ -1,0 +1,2 @@
+{:require  [todocljs.app]
+ :init-fns [todocljs.app/start-application]}
