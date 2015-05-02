@@ -54,6 +54,10 @@
   (fn [db [_ showing-mode]]
     showing-mode))
 
+(register-handler :toggle-task tasks-middle-ware
+  (fn [tasks [_ task]]
+    (update-in tasks [(:id task) :done] not)))
+
 ;; VIEWS ----------------------
 
 (defn view-header-input [{:keys [on-save]}]
@@ -76,7 +80,7 @@
                           })])))
 
 ;; This section should be hidden by default and shown when there are todos
-(defn view-main [tasks]
+(defn view-main [dispatch tasks]
   (when (seq tasks)
     [:section.main
      [:input.toggle-all {:type "checkbox"}]
@@ -86,7 +90,8 @@
       (for [task tasks] ^{:key (:id task)}
                         [:li {:class (when (:done task) "completed")}
                          [:div.view
-                          [:input.toggle {:type "checkbox" :checked (:done task)}]
+                          [:input.toggle {:type "checkbox" :checked (:done task)
+                                          :on-change #(dispatch [:toggle-task task])}]
                           [:label (:text task)]
                           [:button.destroy]]
                          [:input.edit {:value "Create a Todo MVC Template"}]])]]))
@@ -115,7 +120,7 @@
     [:h1 "todos"]
     [view-header-input {:placeholder "What's need to be done?"
                         :on-save     #(dispatch [:add-todo %])}]]
-   [view-main tasks]
+   [view-main dispatch tasks]
    [view-footer dispatch status]])
 
 ;; MAIN ---------------------
