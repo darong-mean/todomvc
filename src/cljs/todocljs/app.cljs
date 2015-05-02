@@ -45,7 +45,7 @@
   (fn [_ _]                                                 ;; the handler
     default-db))
 
-(register-handler :add-todo tasks-middle-ware
+(register-handler :add-task tasks-middle-ware
   (fn [db [_ text]]
     (let [id (next-id db)]
       (assoc db id {:id id :text text :done false}))))
@@ -57,6 +57,10 @@
 (register-handler :toggle-task tasks-middle-ware
   (fn [tasks [_ task]]
     (update-in tasks [(:id task) :done] not)))
+
+(register-handler :delete-task tasks-middle-ware
+  (fn [tasks [_ task]]
+    (dissoc tasks (:id task))))
 
 ;; VIEWS ----------------------
 
@@ -93,7 +97,8 @@
                           [:input.toggle {:type "checkbox" :checked (:done task)
                                           :on-change #(dispatch [:toggle-task task])}]
                           [:label (:text task)]
-                          [:button.destroy]]
+                          [:button.destroy
+                           {:on-click #(dispatch [:delete-task task])}]]
                          [:input.edit {:value "Create a Todo MVC Template"}]])]]))
 
 ;; This footer should hidden by default and shown when there are todos
@@ -119,7 +124,7 @@
    [:header.header
     [:h1 "todos"]
     [view-header-input {:placeholder "What's need to be done?"
-                        :on-save     #(dispatch [:add-todo %])}]]
+                        :on-save     #(dispatch [:add-task %])}]]
    [view-main dispatch tasks]
    [view-footer dispatch status]])
 
