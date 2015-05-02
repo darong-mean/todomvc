@@ -13,7 +13,7 @@
 (register-sub
   :model                                                    ;; usage:  (subscribe [:tasks])
   (fn [db _]
-    db))
+    (reaction {:tasks (when (seq (:tasks @db)) (vals (:tasks @db)))})))
 
 ;; UPDATE ---------------------
 
@@ -31,7 +31,7 @@
 (register-handler :add-todo tasks-middle-ware
   (fn [db [_ text]]
     (let [id (next-id db)]
-      (assoc db id {:id id :text text}))))
+      (assoc db id {:id id :text text :done false}))))
 
 ;; VIEWS ----------------------
 
@@ -55,7 +55,6 @@
                           })])))
 
 ;; This section should be hidden by default and shown when there are todos
-;; This section should be hidden by default and shown when there are todos
 (defn view-main [tasks]
   (when (seq tasks)
     [:section.main
@@ -63,31 +62,13 @@
      [:label {:for "toggle-all"} "Mark all as complete"]
      [:ul.todo-list
       ; List items should get the class `editing` when editing and `completed` when marked as completed
-      (for [task tasks]
-        [:li.completed
+      (for [task tasks] ^{:key (:id task)}
+        [:li {:class (when (:done task) "completed")}
          [:div.view
-          [:input.toggle {:type "checkbox" :checked true}]
-          [:label "Taste Javascript"]
+          [:input.toggle {:type "checkbox" :checked (:done task)}]
+          [:label (:text task)]
           [:button.destroy]]
          [:input.edit {:value "Create a Todo MVC Template"}]])]]))
-;(defn view-main [tasks]
-;  [:section.main
-;   [:input.toggle-all {:type "checkbox"}]
-;   [:label {:for "toggle-all"} "Mark all as complete"]
-;   [:ul.todo-list
-;    ; List items should get the class `editing` when editing and `completed` when marked as completed
-;    [:li.completed
-;     [:div.view
-;      [:input.toggle {:type "checkbox" :checked true}]
-;      [:label "Taste Javascript"]
-;      [:button.destroy]]
-;     [:input.edit {:value "Create a Todo MVC Template"}]]
-;    [:li
-;     [:div.view
-;      [:input.toggle {:type "checkbox"}]
-;      [:label "Buy a unicorn"]
-;      [:button.destroy]]
-;     [:input.edit {:value "Rule the web"}]]]])
 
 ;; This footer should hidden by default and shown when there are todos
 (defn view-footer [tasks]
