@@ -70,6 +70,13 @@
       (map :id)
       (reduce dissoc tasks))))
 
+(register-handler :toggle-all tasks-middle-ware
+  (fn [tasks [_]]
+    (let [new-done (not-every? :done (vals tasks))]         ;; toggle true or false?
+      (reduce #(assoc-in %1 [%2 :done] new-done)
+        tasks
+        (keys tasks)))))
+
 ;; VIEWS ----------------------
 
 (defn view-header-input [{:keys [on-save]}]
@@ -95,7 +102,7 @@
 (defn view-main [dispatch tasks]
   (when (seq tasks)
     [:section.main
-     [:input.toggle-all {:type "checkbox"}]
+     [:input.toggle-all {:type "checkbox" :on-change #(dispatch [:toggle-all])}]
      [:label {:for "toggle-all"} "Mark all as complete"]
      [:ul.todo-list
       ; List items should get the class `editing` when editing and `completed` when marked as completed
