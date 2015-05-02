@@ -62,6 +62,14 @@
   (fn [tasks [_ task]]
     (dissoc tasks (:id task))))
 
+(register-handler :clear-completed-task tasks-middle-ware
+  (fn [tasks [_]]
+    (->>
+      (vals tasks)
+      (filter :done)
+      (map :id)
+      (reduce dissoc tasks))))
+
 ;; VIEWS ----------------------
 
 (defn view-header-input [{:keys [on-save]}]
@@ -94,11 +102,10 @@
       (for [task tasks] ^{:key (:id task)}
                         [:li {:class (when (:done task) "completed")}
                          [:div.view
-                          [:input.toggle {:type "checkbox" :checked (:done task)
+                          [:input.toggle {:type      "checkbox" :checked (:done task)
                                           :on-change #(dispatch [:toggle-task task])}]
                           [:label (:text task)]
-                          [:button.destroy
-                           {:on-click #(dispatch [:delete-task task])}]]
+                          [:button.destroy {:on-click #(dispatch [:delete-task task])}]]
                          [:input.edit {:value "Create a Todo MVC Template"}]])]]))
 
 ;; This footer should hidden by default and shown when there are todos
@@ -116,7 +123,7 @@
       [:li [:a {:class    (when (= (:showing status) :completed) "selected")
                 :href     "#"
                 :on-click #(dispatch [:set-showing :completed])} "Completed"]]]
-     [:button.clear-completed "Clear completed"]            ; Hidden if no completed items are left
+     [:button.clear-completed {:on-click #(dispatch [:clear-completed-task])} "Clear completed"] ; Hidden if no completed items are left
      ]))
 
 (defn view-container [dispatch {:keys [tasks status]}]
