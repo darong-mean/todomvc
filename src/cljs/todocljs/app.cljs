@@ -3,14 +3,12 @@
   (:require [reagent.core :as reagent :refer [atom]]
             [re-frame.core :refer [dispatch dispatch-sync
                                    register-handler subscribe
-                                   register-sub]]))
+                                   register-sub
+                                   path debug]]))
 
 ;; MODEL ----------------------
 
-(def model
-  (reagent/atom {:tasks []}))
-
-(def default-db {:tasks []})
+(def default-db {:tasks {}})
 
 (register-sub
   :model                                                    ;; usage:  (subscribe [:tasks])
@@ -19,19 +17,42 @@
 
 ;; UPDATE ---------------------
 
+; UTILS ------------------
+(def tasks-middle-ware [(path :tasks) debug])
+(defn next-id
+  [todos]
+  ((fnil inc 0) (last (keys todos))))
+
+; HANDLERS ---------------
 (register-handler                                           ;; disptached to on app startup
   :initialise-db                                            ;; event id being handled
   (fn [_ _]                                                 ;; the handler
     default-db))
+(register-handler :add-todo tasks-middle-ware
+  (fn [db [_ text]]
+    (let [id (next-id db)]
+      (assoc db id {:id id :text text}))))
 
 ;; VIEWS ----------------------
 
-(defn view-header []
-  [:header.header
-   [:h1 "todos"]
-   [:input.new-todo {; :autofocus true ; autofocus attribute not support yet?
-                     :type "text" :placeholder "What's need to be done?"
-                     }]])
+(defn view-header-input [{:keys [on-save]}]
+  (let [val  (reagent/atom "")
+        stop #(reset! val "")
+        save #(let [v (-> @val str clojure.string/trim)]
+               (if-not (empty? v) (on-save v))
+               (stop))]
+    (fn [props]
+      [:input.new-todo (merge props
+                         {; :autofocus true ; autofocus attribute not support yet?
+                          :type        "text"
+                          :value       @val
+                          :on-blur     save
+                          :on-change   #(reset! val (-> % .-target .-value))
+                          :on-key-down #(case (.-which %)
+                                         13 (save)            ; key ENTER
+                                         27 (stop)            ; key ESCAPE
+                                         nil)
+                          })])))
 
 ;; This section should be hidden by default and shown when there are todos
 ;; This section should be hidden by default and shown when there are todos
@@ -80,16 +101,19 @@
      [:button.clear-completed "Clear completed"]            ; Hidden if no completed items are left
      ]))
 
-(defn view-container [model]
+(defn view-container [dispatch model]
   [:section.todoapp
-   [view-header]
+   [:header.header
+    [:h1 "todos"]
+    [view-header-input {:placeholder "What's need to be done?"
+                        :on-save #(dispatch [:add-todo %])}]]
    [view-main (:tasks model)]
    [view-footer (:tasks model)]])
 
 ;; MAIN ---------------------
 (defn main []
   (let [model (subscribe [:model])]
-    (fn [] [view-container @model])))
+    (fn [] [view-container dispatch @model])))
 
 (defn start-application []
   (reagent/render-component [main]
