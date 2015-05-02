@@ -8,17 +8,33 @@
 
 ;; MODEL ----------------------
 
-(def default-db {:tasks {}})
+(def default-db {:tasks   {}
+                 :showing :all})
+
+(defn task-seq [db]
+  (when (seq (:tasks db)) (vals (:tasks db))))
 
 (register-sub
-  :model                                                    ;; usage:  (subscribe [:tasks])
+  :tasks
   (fn [db _]
-    (reaction {:tasks (when (seq (:tasks @db)) (vals (:tasks @db)))})))
+    (reaction (filterv
+                (fn [task] (case (:showing @db)
+                             :completed (:done task)
+                             :active (not (:done task))
+                             true))
+                (task-seq @db)))))
+
+(register-sub :task-status
+  (fn [db _]
+    (reaction {:active-count (count (remove :done (task-seq @db)))
+               :total-count  (count (task-seq @db))
+               :showing      (:showing @db)})))
 
 ;; UPDATE ---------------------
 
 ; UTILS ------------------
 (def tasks-middle-ware [(path :tasks) debug])
+
 (defn next-id
   [todos]
   ((fnil inc 0) (last (keys todos))))
@@ -28,10 +44,15 @@
   :initialise-db                                            ;; event id being handled
   (fn [_ _]                                                 ;; the handler
     default-db))
+
 (register-handler :add-todo tasks-middle-ware
   (fn [db [_ text]]
     (let [id (next-id db)]
       (assoc db id {:id id :text text :done false}))))
+
+(register-handler :set-showing [(path :showing) debug]
+  (fn [db [_ showing-mode]]
+    showing-mode))
 
 ;; VIEWS ----------------------
 
@@ -49,8 +70,8 @@
                           :on-blur     save
                           :on-change   #(reset! val (-> % .-target .-value))
                           :on-key-down #(case (.-which %)
-                                         13 (save)            ; key ENTER
-                                         27 (stop)            ; key ESCAPE
+                                         13 (save)          ; key ENTER
+                                         27 (stop)          ; key ESCAPE
                                          nil)
                           })])))
 
@@ -63,38 +84,46 @@
      [:ul.todo-list
       ; List items should get the class `editing` when editing and `completed` when marked as completed
       (for [task tasks] ^{:key (:id task)}
-        [:li {:class (when (:done task) "completed")}
-         [:div.view
-          [:input.toggle {:type "checkbox" :checked (:done task)}]
-          [:label (:text task)]
-          [:button.destroy]]
-         [:input.edit {:value "Create a Todo MVC Template"}]])]]))
+                        [:li {:class (when (:done task) "completed")}
+                         [:div.view
+                          [:input.toggle {:type "checkbox" :checked (:done task)}]
+                          [:label (:text task)]
+                          [:button.destroy]]
+                         [:input.edit {:value "Create a Todo MVC Template"}]])]]))
 
 ;; This footer should hidden by default and shown when there are todos
-(defn view-footer [tasks]
-  (when (seq tasks)
+(defn view-footer [dispatch status]
+  (when (> (:total-count status) 0)
     [:footer.footer
-     [:span.todo-count [:strong 0] " item left"]            ; This should be `0 items left` by default
+     [:span.todo-count [:strong (:active-count status)] " item left"] ; This should be `0 items left` by default
      [:ul.filters                                           ; Remove this if you don't implement routing
-      [:li [:a.selected {:href "#"} "All"]]
-      [:li [:a {:href "#"} "Active"]]
-      [:li [:a {:href "#"} "Completed"]]]
+      [:li [:a {:class    (when (= (:showing status) :all) "selected")
+                :href     "#"
+                :on-click #(dispatch [:set-showing :all])} "All"]]
+      [:li [:a {:class    (when (= (:showing status) :active) "selected")
+                :href     "#"
+                :on-click #(dispatch [:set-showing :active])} "Active"]]
+      [:li [:a {:class    (when (= (:showing status) :completed) "selected")
+                :href     "#"
+                :on-click #(dispatch [:set-showing :completed])} "Completed"]]]
      [:button.clear-completed "Clear completed"]            ; Hidden if no completed items are left
      ]))
 
-(defn view-container [dispatch model]
+(defn view-container [dispatch {:keys [tasks status]}]
   [:section.todoapp
    [:header.header
     [:h1 "todos"]
     [view-header-input {:placeholder "What's need to be done?"
-                        :on-save #(dispatch [:add-todo %])}]]
-   [view-main (:tasks model)]
-   [view-footer (:tasks model)]])
+                        :on-save     #(dispatch [:add-todo %])}]]
+   [view-main tasks]
+   [view-footer dispatch status]])
 
 ;; MAIN ---------------------
 (defn main []
-  (let [model (subscribe [:model])]
-    (fn [] [view-container dispatch @model])))
+  (let [status (subscribe [:task-status])
+        tasks  (subscribe [:tasks])]
+    (fn [] [view-container dispatch {:tasks  @tasks
+                                     :status @status}])))
 
 (defn start-application []
   (reagent/render-component [main]
