@@ -77,9 +77,13 @@
         tasks
         (keys tasks)))))
 
+(register-handler :edit-task tasks-middle-ware
+  (fn [tasks [_ task new-value]]
+    (assoc-in tasks [(:id task) :text] new-value)))
+
 ;; VIEWS ----------------------
 
-(defn view-header-input [{:keys [on-save]}]
+(defn view-input [{:keys [on-save]}]
   (let [val  (reagent/atom "")
         stop #(reset! val "")
         save #(let [v (-> @val str clojure.string/trim)]
@@ -98,29 +102,45 @@
                                          nil)
                           })])))
 
-;; This section should be hidden by default and shown when there are todos
+(defn view-task []
+  (let [editing? (reagent/atom false)
+        stop     #(do (reset! editing? false) nil)
+        val      (reagent/atom "")
+        on-save  (fn [save-fn]
+                   (let [v (-> @val str clojure.string/trim)]
+                     (if-not (empty? v) (save-fn v))
+                     (stop)))]
+    (fn [dispatch task]
+      [:li {:class (str (when (:done task) "completed ")
+                     (when @editing? "editing"))}
+       [:div.view
+        [:input.toggle {:type      "checkbox" :checked (:done task)
+                        :on-change #(dispatch [:toggle-task task])}]
+        [:label {:on-double-click #(do (reset! val (:text task)) (reset! editing? true) nil)}
+         (:text task)]
+        [:button.destroy {:on-click #(dispatch [:delete-task task])}]]
+       [:input.edit {:type        "text"
+                     :value       @val
+                     :on-blur     save
+                     :on-change   #(reset! val (-> % .-target .-value))
+                     :on-key-down #(case (.-which %)
+                                    13 (on-save (fn [v] (dispatch [:edit-task task v]))) ; key ENTER
+                                    27 (stop)               ; key ESCAPE
+                                    nil)}]])))
+
 (defn view-main [dispatch tasks]
   (when (seq tasks)
     [:section.main
      [:input.toggle-all {:type "checkbox" :on-change #(dispatch [:toggle-all])}]
      [:label {:for "toggle-all"} "Mark all as complete"]
      [:ul.todo-list
-      ; List items should get the class `editing` when editing and `completed` when marked as completed
-      (for [task tasks] ^{:key (:id task)}
-                        [:li {:class (when (:done task) "completed")}
-                         [:div.view
-                          [:input.toggle {:type      "checkbox" :checked (:done task)
-                                          :on-change #(dispatch [:toggle-task task])}]
-                          [:label (:text task)]
-                          [:button.destroy {:on-click #(dispatch [:delete-task task])}]]
-                         [:input.edit {:value "Create a Todo MVC Template"}]])]]))
+      (for [task tasks] ^{:key (:id task)} [view-task dispatch task])]]))
 
-;; This footer should hidden by default and shown when there are todos
 (defn view-footer [dispatch status]
   (when (> (:total-count status) 0)
     [:footer.footer
-     [:span.todo-count [:strong (:active-count status)] " item left"] ; This should be `0 items left` by default
-     [:ul.filters                                           ; Remove this if you don't implement routing
+     [:span.todo-count [:strong (:active-count status)] " item left"]
+     [:ul.filters
       [:li [:a {:class    (when (= (:showing status) :all) "selected")
                 :href     "#"
                 :on-click #(dispatch [:set-showing :all])} "All"]]
@@ -130,15 +150,14 @@
       [:li [:a {:class    (when (= (:showing status) :completed) "selected")
                 :href     "#"
                 :on-click #(dispatch [:set-showing :completed])} "Completed"]]]
-     [:button.clear-completed {:on-click #(dispatch [:clear-completed-task])} "Clear completed"] ; Hidden if no completed items are left
-     ]))
+     [:button.clear-completed {:on-click #(dispatch [:clear-completed-task])} "Clear completed"]]))
 
 (defn view-container [dispatch {:keys [tasks status]}]
   [:section.todoapp
    [:header.header
     [:h1 "todos"]
-    [view-header-input {:placeholder "What's need to be done?"
-                        :on-save     #(dispatch [:add-task %])}]]
+    [view-input {:placeholder "What's need to be done?"
+                 :on-save     #(dispatch [:add-task %])}]]
    [view-main dispatch tasks]
    [view-footer dispatch status]])
 
